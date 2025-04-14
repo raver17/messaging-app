@@ -3,15 +3,86 @@
 <head>
   <title>Peer-to-Peer Chat</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
-    #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 10px; }
-    .msg { background: #f1f1f1; padding: 6px; margin: 5px 0; border-radius: 5px; }
-    input, button { padding: 8px; margin: 5px 0; width: 100%; }
+    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; background: #f8f9fa; }
+    h2 { text-align: center; }
+
+    #chat {
+      border: 1px solid #ccc;
+      padding: 10px;
+      height: 320px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      background: white;
+      border-radius: 6px;
+    }
+
+    .msg {
+      max-width: 75%;
+      padding: 10px 14px;
+      margin: 8px 0;
+      border-radius: 18px;
+      clear: both;
+      word-wrap: break-word;
+      position: relative;
+    }
+
+    .mine {
+      background: #007bff;
+      color: white;
+      float: right;
+      text-align: right;
+    }
+
+    .theirs {
+      background: #e2f7d5;
+      color: #333;
+      float: left;
+      text-align: left;
+    }
+
+    .meta {
+      font-size: 12px;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+
+    .timestamp {
+      font-size: 11px;
+      margin-top: 4px;
+      opacity: 0.6;
+    }
+
+    input, button {
+      padding: 10px;
+      margin: 5px 0;
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    #username-wrap {
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
 
-<h2>🧑‍🤝‍🧑 PeerJS Chat</h2>
+<h2>💬 PeerJS Chat</h2>
+
+<div id="username-wrap">
+  <input type="text" id="username" placeholder="Enter your name">
+</div>
 
 <p>Your Peer ID: <strong id="my-id">Loading...</strong></p>
 <input type="text" id="peer-id" placeholder="Enter friend's Peer ID to connect">
@@ -25,10 +96,15 @@
 <!-- PeerJS CDN -->
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <script>
-  const myIdElem = document.getElementById('my-id');
   const peer = new Peer();
-
   let conn;
+  const myIdElem = document.getElementById('my-id');
+  const chatElem = document.getElementById('chat');
+  const username = () => document.getElementById('username').value.trim() || 'You';
+
+  // Load and show saved messages
+  const messages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+  messages.forEach(msg => showMessage(msg, msg.mine ? 'mine' : 'theirs', false));
 
   peer.on('open', id => {
     myIdElem.textContent = id;
@@ -47,27 +123,69 @@
 
   function setupConnection() {
     conn.on('data', data => {
-      showMessage('👤 Friend: ' + data);
+      const msg = {
+        user: data.user,
+        text: data.text,
+        time: new Date().toLocaleTimeString(),
+        mine: false
+      };
+      saveMessage(msg);
+      showMessage(msg, 'theirs');
     });
-    showMessage('✅ Connected!');
+    const welcome = {
+      user: 'System',
+      text: '✅ Connected!',
+      time: new Date().toLocaleTimeString(),
+      mine: false
+    };
+    saveMessage(welcome);
+    showMessage(welcome, 'theirs');
   }
 
   function send() {
-    const msg = document.getElementById('message').value;
-    if (conn && msg.trim()) {
-      conn.send(msg);
-      showMessage('🧍 You: ' + msg);
-      document.getElementById('message').value = '';
-    }
+    const input = document.getElementById('message');
+    const msgText = input.value.trim();
+    if (!msgText || !conn) return;
+
+    const msg = {
+      user: username(),
+      text: msgText,
+      time: new Date().toLocaleTimeString(),
+      mine: true
+    };
+
+    conn.send({ user: username(), text: msgText });
+    saveMessage(msg);
+    showMessage(msg, 'mine');
+    input.value = '';
   }
 
-  function showMessage(text) {
-    const chat = document.getElementById('chat');
+  function showMessage(msg, type, scroll = true) {
     const div = document.createElement('div');
-    div.className = 'msg';
-    div.textContent = text;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
+    div.className = 'msg ' + type;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = msg.user;
+
+    const text = document.createElement('div');
+    text.textContent = msg.text;
+
+    const time = document.createElement('div');
+    time.className = 'timestamp';
+    time.textContent = msg.time;
+
+    div.appendChild(meta);
+    div.appendChild(text);
+    div.appendChild(time);
+    chatElem.appendChild(div);
+
+    if (scroll) chatElem.scrollTop = chatElem.scrollHeight;
+  }
+
+  function saveMessage(msg) {
+    messages.push(msg);
+    localStorage.setItem('chatHistory', JSON.stringify(messages));
   }
 </script>
 
