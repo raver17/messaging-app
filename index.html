@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PeerJS Chat</title>
+  <title>Raver Chat</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -169,6 +169,8 @@
   <button onclick="connect()">Connect</button>
 </div>
 
+<div id="status" style="text-align: center; margin-top: 10px; font-weight: bold;">Disconnected</div>
+
 <div id="chat"></div>
 <div id="typingIndicator"></div>
 
@@ -214,6 +216,7 @@
   const myIdElem = document.getElementById('my-id');
   const chatElem = document.getElementById('chat');
   const typingIndicator = document.getElementById('typingIndicator');
+  const statusElem = document.getElementById('status');
   const username = () => document.getElementById('username').value.trim() || 'You';
 
   const messages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
@@ -236,6 +239,8 @@
   }
 
   function setupConnection() {
+    statusElem.textContent = "✅ Connected to " + conn.peer;
+
     conn.on('data', data => {
       if (data.typing) return showTyping();
 
