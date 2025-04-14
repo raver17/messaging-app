@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Raver Chat</title>
+  <title>PeerJS Chat</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -71,13 +71,17 @@
     button {
       padding: 10px;
       margin: 6px 0;
-      width: 100%;
-      border: none;
-      border-radius: 6px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
       background: #007bff;
       color: white;
       cursor: pointer;
       transition: background 0.3s ease;
+      border: none;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
     button:hover {
       background: #0056b3;
@@ -175,10 +179,10 @@
 <div id="typingIndicator"></div>
 
 <input type="text" id="message" placeholder="Type a message (emojis too 😄)">
-<button onclick="send()">Send</button>
-
 <input type="file" id="imageInput" accept="image/*">
-<button onclick="sendImage()">Send Photo</button>
+<button onclick="send()">
+  <img src="https://img.icons8.com/ios-filled/50/ffffff/paper-plane.png" alt="Send" width="24" height="24">
+</button>
 
 <button class="danger" onclick="confirmAction('clear')">🗑️ Clear Chat History</button>
 <button onclick="showHowTo()">❓ How to Use</button>
@@ -265,43 +269,39 @@
 
   function send() {
     const input = document.getElementById('message');
-    const msgText = input.value.trim();
-    if (!msgText || !conn) return;
-
-    const msg = {
-      user: username(),
-      text: msgText,
-      time: new Date().toLocaleTimeString(),
-      mine: true,
-      isImage: false
-    };
-
-    conn.send({ user: msg.user, text: msg.text });
-    saveMessage(msg);
-    showMessage(msg, 'mine');
-    input.value = '';
-  }
-
-  function sendImage() {
     const fileInput = document.getElementById('imageInput');
+    const msgText = input.value.trim();
     const file = fileInput.files[0];
-    if (!file || !conn) return;
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const msg = {
+    if ((msgText || file) && conn) {
+      let msg = {
         user: username(),
-        text: e.target.result,
         time: new Date().toLocaleTimeString(),
         mine: true,
-        isImage: true
+        isImage: false
       };
-      conn.send({ user: msg.user, text: msg.text, isImage: true });
-      saveMessage(msg);
-      showMessage(msg, 'mine');
-      fileInput.value = '';
-    };
-    reader.readAsDataURL(file);
+
+      if (msgText) {
+        msg.text = msgText;
+      } else if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          msg.text = e.target.result;
+          msg.isImage = true;
+          conn.send({ user: msg.user, text: msg.text, isImage: true });
+          saveMessage(msg);
+          showMessage(msg, 'mine');
+        };
+        reader.readAsDataURL(file);
+        fileInput.value = ''; // clear file input after sending
+      }
+
+      if (msgText && !file) {
+        conn.send({ user: msg.user, text: msg.text });
+        saveMessage(msg);
+        showMessage(msg, 'mine');
+        input.value = '';
+      }
+    }
   }
 
   document.getElementById('message').addEventListener('input', () => {
