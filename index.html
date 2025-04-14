@@ -86,6 +86,7 @@
   <div id="my-id-wrap">
     <p>Your Peer ID: <strong id="my-id">Loading...</strong></p>
     <button onclick="confirmAction('reset')">Reset ID</button>
+    <button onclick="copyId()">Copy ID</button>
   </div>
 
   <div class="row">
@@ -106,6 +107,59 @@
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <script>
 // Your existing JavaScript code
+
+const savedId = localStorage.getItem('peerId');
+const peer = new Peer(savedId || undefined);
+let conn;
+let pendingAction = null;
+let typingTimeout;
+
+const myIdElem = document.getElementById('my-id');
+const chatElem = document.getElementById('chat');
+const typingIndicator = document.getElementById('typingIndicator');
+const username = () => document.getElementById('username').value.trim() || 'You';
+
+const messages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+messages.forEach(msg => showMessage(msg, msg.mine ? 'mine' : 'theirs', false));
+
+peer.on('open', id => {
+  myIdElem.textContent = id;
+  localStorage.setItem('peerId', id);
+});
+
+peer.on('connection', connection => {
+  conn = connection;
+  setupConnection();
+});
+
+function connect() {
+  const friendId = document.getElementById('peer-id').value;
+  conn = peer.connect(friendId);
+  conn.on('open', setupConnection);
+}
+
+function setupConnection() {
+  conn.on('data', data => {
+    if (data.typing) return showTyping();
+
+    const msg = {
+      user: data.user,
+      text: data.text,
+      time: new Date().toLocaleTimeString(),
+      mine: false,
+      isImage: data.isImage || false
+    };
+    saveMessage(msg);
+    showMessage(msg, 'theirs');
+  });
+
+  showMessage({
+    user: 'System',
+    text: '✅ Connected!',
+    time: new Date().toLocaleTimeString(),
+    mine: false
+  }, 'theirs');
+}
 
 function send() {
   const input = document.getElementById('message');
@@ -138,6 +192,109 @@ function send() {
       document.getElementById('errorMessage').style.display = 'none';
     }, 3000);
   }
+}
+
+function sendImage() {
+  const fileInput = document.getElementById('imageInput');
+  const file = fileInput.files[0];
+  if (!file || !conn) return;
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const msg = {
+      user: username(),
+      text: e.target.result,
+      time: new Date().toLocaleTimeString(),
+      mine: true,
+      isImage: true
+    };
+    conn.send({ user: msg.user, text: msg.text, isImage: true });
+    saveMessage(msg);
+    showMessage(msg, 'mine');
+    fileInput.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+document.getElementById('message').addEventListener('input', () => {
+  if (conn) conn.send({ typing: true });
+});
+
+function showTyping() {
+  typingIndicator.textContent = "Your friend is typing...";
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => typingIndicator.textContent = '', 3000);
+}
+
+function showMessage(msg, type, scroll = true) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + type;
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = msg.user;
+
+  const content = document.createElement('div');
+  if (msg.isImage) {
+    const img = document.createElement('img');
+    img.src = msg.text;
+    content.appendChild(img);
+  } else {
+    content.textContent = msg.text;
+  }
+
+  const time = document.createElement('div');
+  time.className = 'timestamp';
+  time.textContent = msg.time;
+
+  div.appendChild(meta);
+  div.appendChild(content);
+  div.appendChild(time);
+  chatElem.appendChild(div);
+
+  if (scroll) chatElem.scrollTop = chatElem.scrollHeight;
+}
+
+function saveMessage(msg) {
+  messages.push(msg);
+  localStorage.setItem('chatHistory', JSON.stringify(messages));
+}
+
+// Confirm Modals
+function confirmAction(action) {
+  pendingAction = action;
+  const text = {
+    reset: "Reset your Peer ID and reload?",
+    clear: "Delete all chat history?"
+  };
+  document.getElementById('confirmText').textContent = text[action];
+  document.getElementById('confirmModal').style.display = 'flex';
+}
+
+function closeModal() {
+  pendingAction = null;
+  document.getElementById('confirmModal').style.display = 'none';
+}
+
+function executeConfirmedAction() {
+  if (pendingAction === 'reset') {
+    localStorage.removeItem('peerId');
+    location.reload();
+  } else if (pendingAction === 'clear') {
+    localStorage.removeItem('chatHistory');
+    chatElem.innerHTML = '';
+  }
+  closeModal();
+}
+
+// Copy ID to clipboard
+function copyId() {
+  const copyText = document.getElementById('my-id');
+  const range = document.createRange();
+  range.selectNode(copyText);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
+  document.execCommand('copy');
 }
 </script>
 
