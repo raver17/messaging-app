@@ -166,6 +166,7 @@ function connect() {
 
 function tryAutoReconnect() {
   reconnectInterval = setInterval(() => {
+    const lastConnectedPeer = localStorage.getItem('lastConnectedPeer');
     if (!conn && lastConnectedPeer) {
       conn = peer.connect(lastConnectedPeer);
       conn.on('open', () => {
