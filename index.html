@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Peer-to-Peer Chat</title>
+  <title>PeerJS Chat (Emoji + Photo)</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; background: #f8f9fa; }
+    body { font-family: sans-serif; padding: 20px; max-width: 550px; margin: auto; background: #f9f9f9; }
     h2 { text-align: center; }
 
     #chat {
       border: 1px solid #ccc;
       padding: 10px;
-      height: 320px;
+      height: 340px;
       overflow-y: auto;
       margin-bottom: 10px;
       background: white;
@@ -71,8 +71,25 @@
       background-color: #0056b3;
     }
 
+    img {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-top: 5px;
+    }
+
     #username-wrap {
       margin-bottom: 10px;
+    }
+
+    #my-id-wrap {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #my-id-text {
+      flex-grow: 1;
     }
   </style>
 </head>
@@ -84,30 +101,38 @@
   <input type="text" id="username" placeholder="Enter your name">
 </div>
 
-<p>Your Peer ID: <strong id="my-id">Loading...</strong></p>
+<div id="my-id-wrap">
+  <p id="my-id-text">Your Peer ID: <strong id="my-id">Loading...</strong></p>
+  <button onclick="resetPeerId()">Reset ID</button>
+</div>
+
 <input type="text" id="peer-id" placeholder="Enter friend's Peer ID to connect">
 <button onclick="connect()">Connect</button>
 
 <div id="chat"></div>
 
-<input type="text" id="message" placeholder="Type your message...">
+<input type="text" id="message" placeholder="Type your message (emoji too 😎)...">
 <button onclick="send()">Send</button>
 
-<!-- PeerJS CDN -->
+<input type="file" id="imageInput" accept="image/*">
+<button onclick="sendImage()">Send Photo</button>
+
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <script>
-  const peer = new Peer();
+  const savedId = localStorage.getItem('peerId');
+  const peer = new Peer(savedId || undefined);
   let conn;
+
   const myIdElem = document.getElementById('my-id');
   const chatElem = document.getElementById('chat');
   const username = () => document.getElementById('username').value.trim() || 'You';
 
-  // Load and show saved messages
   const messages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
   messages.forEach(msg => showMessage(msg, msg.mine ? 'mine' : 'theirs', false));
 
   peer.on('open', id => {
     myIdElem.textContent = id;
+    localStorage.setItem('peerId', id);
   });
 
   peer.on('connection', connection => {
@@ -127,11 +152,13 @@
         user: data.user,
         text: data.text,
         time: new Date().toLocaleTimeString(),
-        mine: false
+        mine: false,
+        isImage: data.isImage || false
       };
       saveMessage(msg);
       showMessage(msg, 'theirs');
     });
+
     const welcome = {
       user: 'System',
       text: '✅ Connected!',
@@ -151,13 +178,38 @@
       user: username(),
       text: msgText,
       time: new Date().toLocaleTimeString(),
-      mine: true
+      mine: true,
+      isImage: false
     };
 
-    conn.send({ user: username(), text: msgText });
+    conn.send({ user: msg.user, text: msg.text });
     saveMessage(msg);
     showMessage(msg, 'mine');
     input.value = '';
+  }
+
+  function sendImage() {
+    const fileInput = document.getElementById('imageInput');
+    const file = fileInput.files[0];
+    if (!file || !conn) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const imgData = e.target.result;
+      const msg = {
+        user: username(),
+        text: imgData,
+        time: new Date().toLocaleTimeString(),
+        mine: true,
+        isImage: true
+      };
+
+      conn.send({ user: msg.user, text: msg.text, isImage: true });
+      saveMessage(msg);
+      showMessage(msg, 'mine');
+      fileInput.value = '';
+    };
+    reader.readAsDataURL(file);
   }
 
   function showMessage(msg, type, scroll = true) {
@@ -168,15 +220,21 @@
     meta.className = 'meta';
     meta.textContent = msg.user;
 
-    const text = document.createElement('div');
-    text.textContent = msg.text;
+    const content = document.createElement('div');
+    if (msg.isImage) {
+      const img = document.createElement('img');
+      img.src = msg.text;
+      content.appendChild(img);
+    } else {
+      content.textContent = msg.text;
+    }
 
     const time = document.createElement('div');
     time.className = 'timestamp';
     time.textContent = msg.time;
 
     div.appendChild(meta);
-    div.appendChild(text);
+    div.appendChild(content);
     div.appendChild(time);
     chatElem.appendChild(div);
 
@@ -186,6 +244,11 @@
   function saveMessage(msg) {
     messages.push(msg);
     localStorage.setItem('chatHistory', JSON.stringify(messages));
+  }
+
+  function resetPeerId() {
+    localStorage.removeItem('peerId');
+    location.reload();
   }
 </script>
 
