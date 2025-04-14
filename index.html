@@ -71,6 +71,14 @@
       background-color: #0056b3;
     }
 
+    .danger {
+      background-color: #dc3545;
+    }
+
+    .danger:hover {
+      background-color: #b52d3b;
+    }
+
     img {
       max-width: 100%;
       border-radius: 8px;
@@ -91,6 +99,35 @@
     #my-id-text {
       flex-grow: 1;
     }
+
+    /* Modal Styles */
+    #confirmModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      max-width: 300px;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .modal-buttons button {
+      flex: 1;
+    }
   </style>
 </head>
 <body>
@@ -103,7 +140,7 @@
 
 <div id="my-id-wrap">
   <p id="my-id-text">Your Peer ID: <strong id="my-id">Loading...</strong></p>
-  <button onclick="resetPeerId()">Reset ID</button>
+  <button onclick="confirmAction('reset')">Reset ID</button>
 </div>
 
 <input type="text" id="peer-id" placeholder="Enter friend's Peer ID to connect">
@@ -117,11 +154,25 @@
 <input type="file" id="imageInput" accept="image/*">
 <button onclick="sendImage()">Send Photo</button>
 
+<button class="danger" onclick="confirmAction('clear')">🗑️ Clear Chat History</button>
+
+<!-- Confirmation Modal -->
+<div id="confirmModal">
+  <div class="modal-content">
+    <p id="confirmText">Are you sure?</p>
+    <div class="modal-buttons">
+      <button onclick="executeConfirmedAction()">Yes</button>
+      <button onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <script>
   const savedId = localStorage.getItem('peerId');
   const peer = new Peer(savedId || undefined);
   let conn;
+  let pendingAction = null;
 
   const myIdElem = document.getElementById('my-id');
   const chatElem = document.getElementById('chat');
@@ -246,9 +297,31 @@
     localStorage.setItem('chatHistory', JSON.stringify(messages));
   }
 
-  function resetPeerId() {
-    localStorage.removeItem('peerId');
-    location.reload();
+  // 🔐 Modal Logic
+  function confirmAction(action) {
+    pendingAction = action;
+    const text = {
+      reset: "Are you sure you want to reset your Peer ID? This will reload the page.",
+      clear: "Are you sure you want to delete all chat history?"
+    };
+    document.getElementById('confirmText').textContent = text[action];
+    document.getElementById('confirmModal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    pendingAction = null;
+    document.getElementById('confirmModal').style.display = 'none';
+  }
+
+  function executeConfirmedAction() {
+    if (pendingAction === 'reset') {
+      localStorage.removeItem('peerId');
+      location.reload();
+    } else if (pendingAction === 'clear') {
+      localStorage.removeItem('chatHistory');
+      chatElem.innerHTML = '';
+    }
+    closeModal();
   }
 </script>
 
