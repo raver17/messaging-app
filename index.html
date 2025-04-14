@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Peer-to-Peer Chat</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 10px; }
+    .msg { background: #f1f1f1; padding: 6px; margin: 5px 0; border-radius: 5px; }
+    input, button { padding: 8px; margin: 5px 0; width: 100%; }
+  </style>
+</head>
+<body>
+
+<h2>🧑‍🤝‍🧑 PeerJS Chat</h2>
+
+<p>Your Peer ID: <strong id="my-id">Loading...</strong></p>
+<input type="text" id="peer-id" placeholder="Enter friend's Peer ID to connect">
+<button onclick="connect()">Connect</button>
+
+<div id="chat"></div>
+
+<input type="text" id="message" placeholder="Type your message...">
+<button onclick="send()">Send</button>
+
+<!-- PeerJS CDN -->
+<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+<script>
+  const myIdElem = document.getElementById('my-id');
+  const peer = new Peer();
+
+  let conn;
+
+  peer.on('open', id => {
+    myIdElem.textContent = id;
+  });
+
+  peer.on('connection', connection => {
+    conn = connection;
+    setupConnection();
+  });
+
+  function connect() {
+    const friendId = document.getElementById('peer-id').value;
+    conn = peer.connect(friendId);
+    conn.on('open', setupConnection);
+  }
+
+  function setupConnection() {
+    conn.on('data', data => {
+      showMessage('👤 Friend: ' + data);
+    });
+    showMessage('✅ Connected!');
+  }
+
+  function send() {
+    const msg = document.getElementById('message').value;
+    if (conn && msg.trim()) {
+      conn.send(msg);
+      showMessage('🧍 You: ' + msg);
+      document.getElementById('message').value = '';
+    }
+  }
+
+  function showMessage(text) {
+    const chat = document.getElementById('chat');
+    const div = document.createElement('div');
+    div.className = 'msg';
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+</script>
+
+</body>
+</html>
