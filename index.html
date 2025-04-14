@@ -112,6 +112,13 @@
   <button class="danger" onclick="confirmAction('clear')">🗑️ Clear Chat History</button>
 </div>
 
+<!-- Modal for confirming actions -->
+<div id="confirmModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px; background-color: white; border: 1px solid #ccc; border-radius: 8px; width: 300px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+  <p id="confirmText">Are you sure?</p>
+  <button onclick="executeConfirmedAction()" class="btn btn-danger">Yes</button>
+  <button onclick="closeModal()" class="btn btn-secondary">No</button>
+</div>
+
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <script>
 // Your existing JavaScript code
@@ -276,7 +283,7 @@ function confirmAction(action) {
     clear: "Delete all chat history?"
   };
   document.getElementById('confirmText').textContent = text[action];
-  document.getElementById('confirmModal').style.display = 'flex';
+  document.getElementById('confirmModal').style.display = 'block';
 }
 
 function closeModal() {
@@ -290,6 +297,7 @@ function executeConfirmedAction() {
     location.reload();
   } else if (pendingAction === 'clear') {
     localStorage.removeItem('chatHistory');
+    messages.length = 0;
     chatElem.innerHTML = '';
   }
   closeModal();
