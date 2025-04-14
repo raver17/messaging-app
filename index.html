@@ -121,27 +121,15 @@
   </div>
 </div>
 
-<!-- Bootstrap JS -->
+<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-
 <script>
-  const savedId = localStorage.getItem('peerId');
-  const peer = new Peer(savedId || undefined);
+  const peer = new Peer();
   let conn;
-  let pendingAction = null;
-  let typingTimeout;
-
-  const chatElem = document.getElementById('chat');
-  const myIdElem = document.getElementById('my-id');
-  const username = () => document.getElementById('username').value.trim() || 'You';
-  const messages = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-
-  messages.forEach(msg => showMessage(msg, msg.mine ? 'mine' : 'theirs', false));
 
   peer.on('open', id => {
-    myIdElem.textContent = id;
-    localStorage.setItem('peerId', id);
+    document.getElementById('my-id').innerText = id;
   });
 
   peer.on('connection', connection => {
@@ -150,160 +138,76 @@
   });
 
   function connect() {
-    const friendId = document.getElementById('peer-id').value.trim();
-    if (!friendId) return;
-    conn = peer.connect(friendId);
-    conn.on('open', () => {
-      setupConnection();
-      showToast("Connected to " + friendId);
-    });
+    const peerId = document.getElementById('peer-id').value;
+    conn = peer.connect(peerId);
+    setupConnection();
   }
 
   function setupConnection() {
+    conn.on('open', () => showToast());
     conn.on('data', data => {
-      if (data.typing) return showTyping();
-
-      const msg = {
-        user: data.user,
-        text: data.text,
-        time: new Date().toLocaleTimeString(),
-        mine: false,
-        isImage: data.isImage || false
-      };
-      saveMessage(msg);
-      showMessage(msg, 'theirs');
+      if (data.type === 'text') {
+        addMessage(data.username, data.text, 'theirs');
+      } else if (data.type === 'image') {
+        addMessage(data.username, '<img src="' + data.data + '">', 'theirs');
+      }
     });
-
-    showMessage({
-      user: 'System',
-      text: '✅ Connected!',
-      time: new Date().toLocaleTimeString(),
-      mine: false
-    }, 'theirs');
   }
 
   function send() {
-    const input = document.getElementById('message');
-    const text = input.value.trim();
-    if (!text || !conn) return;
-
-    const msg = {
-      user: username(),
-      text,
-      time: new Date().toLocaleTimeString(),
-      mine: true,
-      isImage: false
-    };
-
-    conn.send({ user: msg.user, text: msg.text });
-    saveMessage(msg);
-    showMessage(msg, 'mine');
-    input.value = '';
+    const text = document.getElementById('message').value;
+    const username = document.getElementById('username').value || 'Anonymous';
+    if (!conn || !conn.open || !text.trim()) return;
+    conn.send({ type: 'text', username, text });
+    addMessage(username, text, 'mine');
+    document.getElementById('message').value = '';
   }
 
-  function saveMessage(msg) {
-    messages.push(msg);
-    localStorage.setItem('chatHistory', JSON.stringify(messages));
+  function addMessage(user, content, cls) {
+    const el = document.createElement('div');
+    el.className = `msg ${cls}`;
+    el.innerHTML = `<div class="meta">${user}</div><div>${content}</div><div class="timestamp">${new Date().toLocaleTimeString()}</div>`;
+    document.getElementById('chat').appendChild(el);
+    document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
   }
 
-  function showMessage(msg, type, scroll = true) {
-    const div = document.createElement('div');
-    div.className = 'msg ' + type;
-
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.textContent = msg.user;
-
-    const content = document.createElement('div');
-    if (msg.isImage) {
-      const img = document.createElement('img');
-      img.src = msg.text;
-      content.appendChild(img);
-    } else {
-      content.textContent = msg.text;
-    }
-
-    const time = document.createElement('div');
-    time.className = 'timestamp';
-    time.textContent = msg.time;
-
-    div.appendChild(meta);
-    div.appendChild(content);
-    div.appendChild(time);
-    chatElem.appendChild(div);
-
-    if (scroll) chatElem.scrollTop = chatElem.scrollHeight;
-  }
-
-  function showTyping() {
-    const typingIndicator = document.getElementById('typingIndicator');
-    typingIndicator.textContent = "Your friend is typing...";
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => typingIndicator.textContent = '', 3000);
-  }
-
-  function confirmAction(action) {
-    if (action === 'reset') {
-      if (confirm("Reset your Peer ID and reload?")) {
-        localStorage.removeItem('peerId');
-        location.reload();
-      }
-    } else if (action === 'clear') {
-      if (confirm("Clear all chat history?")) {
-        localStorage.removeItem('chatHistory');
-        chatElem.innerHTML = '';
-      }
-    }
-  }
-
-  function showToast(message) {
-    const toastEl = document.getElementById('toast');
-    toastEl.querySelector('.toast-body').textContent = message;
-    const toast = new bootstrap.Toast(toastEl);
-    toast.show();
-  }
-
-  function copyId() {
-    const id = myIdElem.textContent;
-    navigator.clipboard.writeText(id).then(() => showToast("Copied your Peer ID!"));
-  }
-
-  document.getElementById('message').addEventListener('input', () => {
-    if (conn) conn.send({ typing: true });
-  });
-
-  // Confirm before refresh
-  window.addEventListener("beforeunload", function (e) {
-    e.preventDefault();
-    e.returnValue = "Are you sure you want to leave?";
-  });
-
-  // Trigger image upload
-  document.getElementById('imageInput').addEventListener('change', function () {
-    const file = this.files[0];
-    if (!file || !conn) return;
-
+  document.getElementById('imageInput').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file || !conn || !conn.open) return;
     const reader = new FileReader();
-    reader.onload = function (e) {
-      const msg = {
-        user: username(),
-        text: e.target.result,
-        time: new Date().toLocaleTimeString(),
-        mine: true,
-        isImage: true
-      };
-      conn.send({ user: msg.user, text: msg.text, isImage: true });
-      saveMessage(msg);
-      showMessage(msg, 'mine');
+    reader.onload = () => {
+      const data = reader.result;
+      const username = document.getElementById('username').value || 'Anonymous';
+      conn.send({ type: 'image', username, data });
+      addMessage(username, `<img src="${data}">`, 'mine');
     };
     reader.readAsDataURL(file);
   });
 
-  // How-To Modal Placeholder
+  function showToast() {
+    const toast = new bootstrap.Toast(document.getElementById('toast'));
+    toast.show();
+  }
+
+  function copyId() {
+    navigator.clipboard.writeText(document.getElementById('my-id').innerText)
+      .then(() => alert('ID copied!'));
+  }
+
+  function confirmAction(action) {
+    if (confirm(`Are you sure you want to ${action} chat?`)) {
+      if (action === 'clear') document.getElementById('chat').innerHTML = '';
+      if (action === 'reset') location.reload();
+    }
+  }
+
   function showHowTo() {
-    alert("1. Enter your name\n2. Share your Peer ID\n3. Enter friend's Peer ID\n4. Start chatting!");
+    alert(`How to use:
+1. Enter your name.
+2. Share your Peer ID.
+3. Enter a friend's Peer ID and connect.
+4. Start chatting and share images!`);
   }
 </script>
-
 </body>
 </html>
