@@ -121,11 +121,10 @@
   </div>
 </div>
 
-<!-- Scripts -->
+<!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <script>
-
 let conn;
 let typingTimeout;
 let reconnectInterval;
@@ -137,14 +136,12 @@ const lastConnectedPeer = localStorage.getItem('lastConnectedPeer');
 
 messages.forEach(msg => showMessage(msg, msg.mine ? 'mine' : 'theirs', false));
 
+const peer = new Peer(localStorage.getItem('peerId') || undefined);
+
 peer.on('open', id => {
   myIdElem.textContent = id;
   localStorage.setItem('peerId', id);
-
-  // Try auto reconnect
-  if (lastConnectedPeer && !conn) {
-    tryAutoReconnect();
-  }
+  if (lastConnectedPeer && !conn) tryAutoReconnect();
 });
 
 peer.on('connection', connection => {
@@ -179,11 +176,7 @@ function tryAutoReconnect() {
 function setupConnection() {
   conn.on('data', data => {
     if (data.typing) return showTyping();
-
-    if (data.ack && data.id) {
-      updateMessageStatus(data.id, data.ack);
-      return;
-    }
+    if (data.ack && data.id) return updateMessageStatus(data.id, data.ack);
 
     const msg = {
       id: data.id || Date.now().toString(),
@@ -194,25 +187,13 @@ function setupConnection() {
       isImage: data.isImage || false
     };
 
-    // Send back delivery ack
     conn.send({ ack: 'delivered', id: msg.id });
-
-    // Show & save
     saveMessage(msg);
     showMessage(msg, 'theirs');
-
-    // Send seen after 2 seconds
-    setTimeout(() => {
-      conn.send({ ack: 'seen', id: msg.id });
-    }, 2000);
+    setTimeout(() => conn.send({ ack: 'seen', id: msg.id }), 2000);
   });
 
-  showMessage({
-    user: 'System',
-    text: '✅ Connected!',
-    time: new Date().toLocaleTimeString(),
-    mine: false
-  }, 'theirs');
+  showMessage({ user: 'System', text: '✅ Connected!', time: new Date().toLocaleTimeString(), mine: false }, 'theirs');
 }
 
 function send() {
@@ -238,13 +219,7 @@ function send() {
 
 function updateMessageStatus(id, status) {
   const el = document.querySelector(`[data-id="${id}"] .status`);
-  if (el) {
-    el.textContent =
-      status === 'delivered' ? '✓✓' :
-      status === 'seen' ? '👁' : '✓';
-  }
-
-  // Optional: update status in localStorage
+  if (el) el.textContent = status === 'seen' ? '👁' : status === 'delivered' ? '✓✓' : '✓';
   const i = messages.findIndex(m => m.id === id);
   if (i !== -1) {
     messages[i].status = status;
@@ -262,13 +237,7 @@ function showMessage(msg, type, scroll = true) {
   meta.textContent = msg.user;
 
   const content = document.createElement('div');
-  if (msg.isImage) {
-    const img = document.createElement('img');
-    img.src = msg.text;
-    content.appendChild(img);
-  } else {
-    content.textContent = msg.text;
-  }
+  msg.isImage ? content.appendChild(Object.assign(document.createElement('img'), { src: msg.text })) : content.textContent = msg.text;
 
   const time = document.createElement('div');
   time.className = 'timestamp';
@@ -278,7 +247,6 @@ function showMessage(msg, type, scroll = true) {
   div.appendChild(content);
   div.appendChild(time);
   chatElem.appendChild(div);
-
   if (scroll) chatElem.scrollTop = chatElem.scrollHeight;
 }
 
@@ -287,91 +255,72 @@ function saveMessage(msg) {
   localStorage.setItem('chatHistory', JSON.stringify(messages));
 }
 
-// The rest (copyId, showToast, etc.) remains unchanged...
+function showTyping() {
+  const typingIndicator = document.getElementById('typingIndicator');
+  typingIndicator.textContent = "Your friend is typing...";
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => typingIndicator.textContent = '', 3000);
+}
 
-  const peer = new Peer();
-  let conn;
-
-  peer.on('open', id => {
-    document.getElementById('my-id').innerText = id;
-  });
-
-  peer.on('connection', connection => {
-    conn = connection;
-    setupConnection();
-  });
-
-  function connect() {
-    const peerId = document.getElementById('peer-id').value;
-    conn = peer.connect(peerId);
-    setupConnection();
-  }
-
-  function setupConnection() {
-    conn.on('open', () => showToast());
-    conn.on('data', data => {
-      if (data.type === 'text') {
-        addMessage(data.username, data.text, 'theirs');
-      } else if (data.type === 'image') {
-        addMessage(data.username, '<img src="' + data.data + '">', 'theirs');
-      }
-    });
-  }
-
-  function send() {
-    const text = document.getElementById('message').value;
-    const username = document.getElementById('username').value || 'Anonymous';
-    if (!conn || !conn.open || !text.trim()) return;
-    conn.send({ type: 'text', username, text });
-    addMessage(username, text, 'mine');
-    document.getElementById('message').value = '';
-  }
-
-  function addMessage(user, content, cls) {
-    const el = document.createElement('div');
-    el.className = `msg ${cls}`;
-    el.innerHTML = `<div class="meta">${user}</div><div>${content}</div><div class="timestamp">${new Date().toLocaleTimeString()}</div>`;
-    document.getElementById('chat').appendChild(el);
-    document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-  }
-
-  document.getElementById('imageInput').addEventListener('change', function (e) {
-    const file = e.target.files[0];
-    if (!file || !conn || !conn.open) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = reader.result;
-      const username = document.getElementById('username').value || 'Anonymous';
-      conn.send({ type: 'image', username, data });
-      addMessage(username, `<img src="${data}">`, 'mine');
-    };
-    reader.readAsDataURL(file);
-  });
-
-  function showToast() {
-    const toast = new bootstrap.Toast(document.getElementById('toast'));
-    toast.show();
-  }
-
-  function copyId() {
-    navigator.clipboard.writeText(document.getElementById('my-id').innerText)
-      .then(() => alert('ID copied!'));
-  }
-
-  function confirmAction(action) {
-    if (confirm(`Are you sure you want to ${action} chat?`)) {
-      if (action === 'clear') document.getElementById('chat').innerHTML = '';
-      if (action === 'reset') location.reload();
+function confirmAction(action) {
+  if (action === 'reset') {
+    if (confirm("Reset your Peer ID and reload?")) {
+      localStorage.removeItem('peerId');
+      location.reload();
+    }
+  } else if (action === 'clear') {
+    if (confirm("Clear all chat history?")) {
+      localStorage.removeItem('chatHistory');
+      chatElem.innerHTML = '';
     }
   }
+}
 
-  function showHowTo() {
-    alert(`How to use:
-1. Enter your name.
-2. Share your Peer ID.
-3. Enter a friend's Peer ID and connect.
-4. Start chatting and share images!`);
-  }
+function showToast(message) {
+  const toastEl = document.getElementById('toast');
+  toastEl.querySelector('.toast-body').textContent = message;
+  new bootstrap.Toast(toastEl).show();
+}
+
+function copyId() {
+  const id = myIdElem.textContent;
+  navigator.clipboard.writeText(id).then(() => showToast("Copied your Peer ID!"));
+}
+
+document.getElementById('message').addEventListener('input', () => {
+  if (conn) conn.send({ typing: true });
+});
+
+// Confirm before refresh
+window.addEventListener("beforeunload", function (e) {
+  e.preventDefault();
+  e.returnValue = "Are you sure you want to leave?";
+});
+
+document.getElementById('imageInput').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file || !conn) return;
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const msg = {
+      id: Date.now().toString(),
+      user: username(),
+      text: e.target.result,
+      time: new Date().toLocaleTimeString(),
+      mine: true,
+      isImage: true,
+      status: 'sent'
+    };
+    conn.send({ id: msg.id, user: msg.user, text: msg.text, isImage: true });
+    saveMessage(msg);
+    showMessage(msg, 'mine');
+  };
+  reader.readAsDataURL(file);
+});
+
+function showHowTo() {
+  alert("1. Enter your name\n2. Share your Peer ID\n3. Enter friend's Peer ID\n4. Start chatting!");
+}
 </script>
 </body>
 </html>
